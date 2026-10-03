@@ -8,8 +8,10 @@ export default async function(req:Request){
  try{
   const url=new URL(req.url),store=getStore({name:'sentinela-visits-v1',consistency:'strong'});
   if(req.method==='GET'){
-   const expected=Netlify.env.get('SENTINELA_ANALYTICS_READ_KEY')||'',provided=(req.headers.get('authorization')||'').replace(/^Bearer /,'');
-   if(!expected||expected.length!==provided.length||!timingSafeEqual(Buffer.from(expected),Buffer.from(provided)))return reply({error:'Unauthorized'},401);
+   const expected=process.env.SENTINELA_ANALYTICS_READ_KEY||'',provided=(req.headers.get('authorization')||'').replace(/^Bearer /,'');
+   if(!/^[a-f0-9]{64}$/.test(provided))return reply({error:'Unauthorized'},401);
+   if(!expected)return reply({error:'Analytics configuration unavailable'},503);
+   if(expected.length!==provided.length||!timingSafeEqual(Buffer.from(expected),Buffer.from(provided)))return reply({error:'Unauthorized'},401);
    let start=await store.get('meta/start',{type:'json'}) as {date:string}|null;
    if(!start){start={date:day()};await store.setJSON('meta/start',start,{onlyIfNew:true});start=await store.get('meta/start',{type:'json'}) as {date:string};}
    const days=await Promise.all(Array.from({length:7},async(_,i)=>{const date=day(new Date(Date.now()-(6-i)*86400000));if(date<start.date)return {date,devices:null};const {blobs}=await store.list({prefix:`days/${date}/`});return {date,devices:blobs.length};}));
